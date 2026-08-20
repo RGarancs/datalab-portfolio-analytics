@@ -34,8 +34,8 @@ st.set_page_config(page_title="Data Lab Portfolio Analytics", page_icon="◆",
 st.markdown(
     '<div class="dl-demo-banner" style="font:500 12px/1.5 Manrope,Helvetica Neue,Arial,sans-serif;letter-spacing:.04em;'
     'padding:8px 14px;border-radius:8px;background:rgba(26,107,112,.12);border:1px solid rgba(26,107,112,.35);margin:-8px 0 14px">'
-    '<b>Data Lab · demonstration.</b> A portfolio and investor-reporting suite for a lending platform, running on fully '
-    'synthetic data. Everything is interactive; nothing is real. '
+    '<b>Data Lab · demonstration.</b> A portfolio and investor-reporting suite for a lending platform. '
+    'Everything is interactive — filter, drill down, export. '
     '<a href="https://rihardsgarancs.com/company" style="color:#5fb7ae;text-decoration:none">← rihardsgarancs.com/company</a></div>',
     unsafe_allow_html=True)
 
@@ -203,11 +203,11 @@ def main() -> None:
                             help="Switches the report name and hides internal-only KPIs for non-internal audiences.")
 
         st.markdown('<hr class="nk-hr"/>', unsafe_allow_html=True)
-        st.markdown('<span class="nk-kicker">Synthetic <i>Data</i></span>', unsafe_allow_html=True)
+        st.markdown('<span class="nk-kicker">Demo <i>Data</i></span>', unsafe_allow_html=True)
         size_key = st.selectbox("Dataset size", list(SIZE_PRESETS.keys()), index=1, help="Row volume to generate.")
         seed = st.number_input("Random seed", min_value=0, max_value=999_999, value=42, step=1,
-                               help="Try another random draw of the synthetic data.")
-        if st.button("Regenerate synthetic data"):
+                               help="Try another random draw of the demo data.")
+        if st.button("Regenerate demo data"):
             load_data.clear()
         data = load_data(int(seed), size_key)
         today_ref = pd.Timestamp(data.get("generated_at") or TODAY)
