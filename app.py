@@ -29,24 +29,23 @@ from dims import SPLIT_DIMS
 from ui import set_deep_teal, deep_dive
 
 st.set_page_config(page_title="Data Lab Portfolio Analytics", page_icon="◆",
-                   layout="wide", initial_sidebar_state="expanded")
+                   layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown(
     '<div class="dl-demo-banner" style="font:500 12px/1.5 Manrope,Helvetica Neue,Arial,sans-serif;letter-spacing:.04em;'
-    'padding:8px 14px;border-radius:8px;background:rgba(26,107,112,.12);border:1px solid rgba(26,107,112,.35);margin:-8px 0 14px">'
+    'padding:9px 16px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);margin:-8px 0 14px;color:#cfdad8">'
     '<b>Data Lab · demonstration.</b> A portfolio and investor-reporting suite for a lending platform. '
     'Everything is interactive — filter, drill down, export. '
-    '<a href="https://rihardsgarancs.com/company" style="color:#5fb7ae;text-decoration:none">← rihardsgarancs.com/company</a></div>',
+    '<a href="https://rihardsgarancs.com/company" style="color:#C9A24E;text-decoration:none">← rihardsgarancs.com/company</a></div>',
     unsafe_allow_html=True)
 
 TODAY = pd.Timestamp("2026-07-13")
 
 SIZE_PRESETS = {
-    "Preview (fast)": dict(n_clients=25, n_projects=80, n_investors=1200),
-    "Realistic (default)": dict(n_clients=55, n_projects=190, n_investors=4200),
-    "Large (stress test)": dict(n_clients=110, n_projects=380, n_investors=9000),
+    "Preview": dict(n_clients=25, n_projects=80, n_investors=1200),
 }
-SIZE_SHORT = {"Preview (fast)": "Preview", "Realistic (default)": "Realistic", "Large (stress test)": "Large"}
+SIZE_SHORT = {"Preview": "Preview"}
+PREVIEW_SEED = 42
 
 # tab identity (icon key -> label). Icon order must match the rendered tab order.
 BASE_TAB_ORDER = ["overview", "outstanding", "cumulative", "activity", "funds", "projects", "risk", "portfolio"]
@@ -113,12 +112,16 @@ Full column dictionary + Excel model: `README.md` · `data_model.xlsx`.
 DATALAB_DATA = os.environ.get("DATALAB_DATA")
 
 
-@st.cache_data(show_spinner="Loading data…")
-def load_data(seed: int, size_key: str) -> dict:
-    if DATALAB_DATA:
-        from real_data import load_from_excel
-        return load_from_excel(DATALAB_DATA)
+@st.cache_resource(show_spinner="Building the demo dataset…")
+def _dataset(seed: int, size_key: str) -> dict:
+    # cache_resource keeps the object in memory (no pickling): the in-browser
+    # pandas build cannot unpickle datetime64 arrays, which broke cache_data on rerun.
     return generate_dataset(seed=seed, **SIZE_PRESETS[size_key])
+
+
+def load_data(seed: int, size_key: str) -> dict:
+    d = _dataset(seed, size_key)
+    return {k: (v.copy() if hasattr(v, "copy") else v) for k, v in d.items()}
 
 
 def apply_dimension_filters(data, countries, ptypes, ratings, itypes, methods) -> dict:
@@ -194,83 +197,34 @@ def main() -> None:
     if "_pending_split_label" in st.session_state:
         st.session_state["split_label"] = st.session_state.pop("_pending_split_label")
 
-    with st.sidebar:
-        st.markdown('<span class="nk-kicker">Data Lab <i>Controls</i></span>', unsafe_allow_html=True)
-        theme = st.radio("Theme", list(PALETTES.keys()), horizontal=True,
-                         format_func=lambda t: {"dark": "Dark", "light": "Light"}[t], key="theme",
-                         help="Dark or light.")
-        audience = st.radio("Report audience", ["Internal", "Investor-Facing", "Public Website"],
-                            help="Switches the report name and hides internal-only KPIs for non-internal audiences.")
-
-        st.markdown('<hr class="nk-hr"/>', unsafe_allow_html=True)
-        st.markdown('<span class="nk-kicker">Demo <i>Data</i></span>', unsafe_allow_html=True)
-        size_key = st.selectbox("Dataset size", list(SIZE_PRESETS.keys()), index=1, help="Row volume to generate.")
-        seed = st.number_input("Random seed", min_value=0, max_value=999_999, value=42, step=1,
-                               help="Try another random draw of the demo data.")
-        if st.button("Regenerate demo data"):
-            load_data.clear()
-        data = load_data(int(seed), size_key)
-        today_ref = pd.Timestamp(data.get("generated_at") or TODAY)
-
-        st.markdown('<hr class="nk-hr"/>', unsafe_allow_html=True)
-        st.markdown('<span class="nk-kicker">View</span>', unsafe_allow_html=True)
-        loan_cat = st.segmented_control("Loan book", ["All", "Real Estate", "Business"], default="All",
-                                        key="loan_cat", help="How the whole book splits.") or "All"
-        period = st.segmented_control("Reporting period", periods.PERIODS, default="Snapshot", key="period",
-                                      help="Applies to every chart & table. Snapshot = all-time. Flow charts use "
-                                           "the window; stock charts are as of the window end; KPIs show deltas.") or "Snapshot"
-        custom = None
-        if period == "Custom":
-            dv = st.date_input("Custom range",
-                               value=(data["projects"]["start_date"].min().date(), today_ref.date()),
-                               min_value=data["projects"]["start_date"].min().date(), max_value=today_ref.date())
-            if isinstance(dv, tuple) and len(dv) == 2:
-                custom = (dv[0], dv[1])
-        include_infunding = st.toggle("Include in-funding loans", value=True,
-                                      help="Include Available / Servicing (still-raising) loans in every view.")
-        split_label = st.selectbox("Split by", list(SPLIT_DIMS.keys()), key="split_label",
-                                   help="Dimension used by the Overview / Projects breakdown charts & tables.")
-        split_table, split_col = SPLIT_DIMS[split_label]
-        focus_options = ["All"] + sorted(data[split_table][split_col].dropna().unique().tolist())
-        if st.session_state.get("focus_value") not in focus_options:
-            st.session_state["focus_value"] = "All"
-        focus = st.selectbox(f"Focus · {split_label}", focus_options, key="focus_value",
-                             help="Narrow the whole dashboard to one value (or click a bar on Overview).")
-        _dmin = min(data["projects"]["start_date"].min(), data["investors"]["registration_date"].min())
-        _ws, _we = periods.resolve_window(period, today_ref, _dmin, custom)
-        _ps, _pe = periods.previous_window(period, _ws, _we)
-        if period in periods.PERIODS_WITH_DELTA:
-            st.caption(f"Window: {_ws.date()} → {_we.date()}  ·  ↔ vs {periods.comparison_label(period, _ps, _pe)}")
-        else:
-            st.caption("All-time snapshot · no period comparison.")
-
-        st.markdown('<hr class="nk-hr"/>', unsafe_allow_html=True)
-        st.markdown('<span class="nk-kicker">Dimension <i>Filters</i></span>', unsafe_allow_html=True)
-        all_countries = sorted(data["projects"]["country"].unique())
-        all_ptypes = sorted(data["projects"]["project_type"].unique())
-        all_ratings = sorted(data["projects"]["rating"].unique())
-        all_itypes = sorted(data["investors"]["investor_type"].unique())
-        countries = st.multiselect("Country", all_countries, default=all_countries)
-        ptypes = st.multiselect("Project type", all_ptypes, default=all_ptypes)
-        ratings = st.multiselect("Rating", all_ratings, default=all_ratings)
-        itypes = st.multiselect("Investor type", all_itypes, default=all_itypes)
-        methods = st.multiselect("Investment method", ["Auto", "Manual"], default=["Auto", "Manual"])
-
-        st.markdown('<hr class="nk-hr"/>', unsafe_allow_html=True)
-        st.markdown('<span class="nk-kicker">Overview <i>KPIs (8)</i></span>', unsafe_allow_html=True)
-        selected_kpis = st.multiselect("KPI cards on Overview", list(CATALOG.keys()),
-                                       default=DEFAULT_KPIS, format_func=lambda k: CATALOG[k]["label"],
-                                       help="Pick which of the 12 metrics show on the Overview tab.")
-        show_sparklines = st.toggle("Sparklines on KPI cards", value=False,
-                                    help="Add a 12-month mini trend line under each KPI number.")
-        deep_teal = st.toggle("Teal deep-dive sections", value=False,
-                              help="Paint the deep-dive cards in each tab with the teal growth-story surface.")
-        set_deep_teal(deep_teal)
-        st.markdown('<hr class="nk-hr"/>', unsafe_allow_html=True)
-        with st.expander("Data dictionary"):
-            st.markdown(DATA_DICTIONARY_MD)
-        with st.expander("Audience visibility — what's shown to whom"):
-            st.markdown(AUDIENCE_MATRIX_MD)
+    # ---- public preview: fixed settings, no sidebar ----
+    theme = "dark"
+    audience = "Internal"
+    size_key = "Preview"
+    data = load_data(PREVIEW_SEED, size_key)
+    today_ref = pd.Timestamp(data.get("generated_at") or TODAY)
+    loan_cat = "All"
+    period = "Snapshot"
+    custom = None
+    include_infunding = True
+    split_label = st.session_state.get("split_label") or list(SPLIT_DIMS.keys())[0]
+    if split_label not in SPLIT_DIMS:
+        split_label = list(SPLIT_DIMS.keys())[0]
+    st.session_state["split_label"] = split_label
+    split_table, split_col = SPLIT_DIMS[split_label]
+    focus = st.session_state.get("focus_value") or "All"
+    focus_options = ["All"] + sorted(data[split_table][split_col].dropna().unique().tolist())
+    if focus not in focus_options:
+        focus = "All"
+    all_countries = sorted(data["projects"]["country"].unique())
+    all_ptypes = sorted(data["projects"]["project_type"].unique())
+    all_ratings = sorted(data["projects"]["rating"].unique())
+    all_itypes = sorted(data["investors"]["investor_type"].unique())
+    countries, ptypes, ratings, itypes = all_countries, all_ptypes, all_ratings, all_itypes
+    methods = ["Auto", "Manual"]
+    selected_kpis = DEFAULT_KPIS
+    show_sparklines = True
+    set_deep_teal(False)
 
     inject_css(theme, tab_order=tab_order_for(audience))
 
@@ -294,8 +248,8 @@ def main() -> None:
     windowed = apply_window(scoped, window_start, window_end)  # flow views
 
     # ---- masthead (dynamic name) ----
-    word = AUDIENCE_WORD.get(audience, "Internal")
-    render_masthead(f"Data Lab <em>{word}</em> statistics")
+    word = "Preview"
+    render_masthead("Data Lab <em>Portfolio</em> analytics")
 
     # ---- PUBLIC: trimmed, credibility-first layout (hero + 3 charts + glossary) ----
     if audience == "Public Website":
@@ -304,7 +258,7 @@ def main() -> None:
         return
 
     # ---- active-filter chips ----
-    chips = [("Report", word), ("Book", loan_cat), ("Period", periods.window_label(period, window_start, window_end))]
+    chips = [("Report", word), ("Period", periods.window_label(period, window_start, window_end))]
     if show_delta:
         chips.append(("Compare vs", periods.comparison_label(period, prev_start, prev_end)))
     if focus and focus != "All":

@@ -13,20 +13,15 @@ from urllib.parse import quote
 
 PALETTES: dict[str, dict[str, str]] = {
     "dark": dict(
-        smoke="#000000", panel="#000000", card="#2A2A30", plot="#34343B", ink="#FBFBFB", soft="#A4A4A4", faint="#6E6E6E",
-        voice="#5C5CFC", deep="#7D7DFD", gold="#FC9F30", teal="#002121",
+        smoke="#062325", panel="#083034", card="#0F3D42", plot="rgba(255,255,255,0.03)",
+        ink="#F4F1E8", soft="#A9BDB9", faint="#6F8B88",
+        voice="#C9A24E", deep="#E3C98A", gold="#5FB7AE", teal="#0B4046",
         line="rgba(255,255,255,.09)", line2="rgba(255,255,255,.16)",
-        pos="#34D399", neg="#FF5251", default="#5A5A5A", shadow="rgba(0,0,0,.55)",
-    ),
-    "light": dict(
-        smoke="#F4F4F5", panel="#FFFFFF", card="#FFFFFF", plot="#FAFAFB", ink="#0A0A0A", soft="#71717A", faint="#A1A1AA",
-        voice="#5226E5", deep="#7D7DFD", gold="#D4792E", teal="#002121",
-        line="rgba(10,10,10,.07)", line2="rgba(10,10,10,.13)",
-        pos="#059669", neg="#EF4444", default="#9CA3AF", shadow="rgba(24,24,40,.14)",
+        pos="#5CC8A0", neg="#E0645A", default="#4F6B69", shadow="rgba(0,0,0,.55)",
     ),
 }
 
-FONT_DISPLAY = "'DM Serif Display', Georgia, serif"
+FONT_DISPLAY = "'Playfair Display', Georgia, serif"
 FONT_BODY = "'Manrope', -apple-system, Helvetica, Arial, sans-serif"
 FONT_LABEL = "'Manrope', Arial, sans-serif"
 
@@ -341,7 +336,7 @@ def inject_css(theme: str, tab_order=None) -> None:
     st.markdown(
         f"""
         <style>
-        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=DM+Serif+Display:ital@0;1&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,500;1,400&display=swap');
 
         :root {{
             --smoke:{p['smoke']}; --panel:{p['panel']}; --card:{p['card']}; --ink:{p['ink']};
@@ -353,18 +348,33 @@ def inject_css(theme: str, tab_order=None) -> None:
             --seg-idle:{(p['soft'] if theme=='dark' else p['ink'])};
             --seg-track:{('rgba(255,255,255,0.05)' if theme=='dark' else '#ECECF1')};
             --seg-active:{('rgba(255,255,255,0.10)' if theme=='dark' else '#ffffff')};
-            --seg-active-text:{(p['neg'] if theme=='dark' else p['voice'])};
-            --seg-active-border:{('rgba(255,82,81,0.55)' if theme=='dark' else 'rgba(82,38,229,0.24)')};
+            --seg-active-text:{p['voice']};
+            --seg-active-border:rgba(201,162,78,0.55);
         }}
 
         html, body, [class*="css"] {{ font-family:{FONT_BODY}; }}
+        .nk-glass, [data-testid="stExpander"] details, .nk-chip, .nk-panel, .stPlotlyChart, [data-testid="stDataFrame"] {{
+            background:rgba(255,255,255,.045) !important; backdrop-filter:blur(16px) saturate(1.1); -webkit-backdrop-filter:blur(16px) saturate(1.1);
+            border:1px solid rgba(255,255,255,.11) !important; border-radius:16px; }}
+        .stPlotlyChart {{ padding:8px 6px 2px; }}
         .stApp {{ background: var(--smoke); color: var(--ink); font-family:{FONT_BODY}; font-weight:400; }}
+        .stApp::before {{ content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+            background:
+              radial-gradient(900px 600px at 12% 8%, rgba(201,162,78,.16), transparent 62%),
+              radial-gradient(1100px 700px at 88% 22%, rgba(95,183,174,.16), transparent 60%),
+              radial-gradient(800px 600px at 50% 100%, rgba(227,201,138,.10), transparent 60%); }}
+        /* public preview: no sidebar, no chrome */
+        [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"], [data-testid="collapsedControl"],
+        [data-testid="stSidebarCollapseButton"], [data-testid="stMainMenu"], [data-testid="stToolbar"] {{ display:none !important; }}
+        [data-testid="stHeader"] {{ height:0 !important; }}
         [data-testid="stAppViewContainer"], [data-testid="stHeader"] {{ background: transparent; }}
         .block-container {{ position:relative; z-index:1; padding-top:1.4rem; max-width:1340px; }}
 
         h1,h2,h3,h4 {{ font-family:{FONT_BODY} !important; color:var(--ink) !important; font-weight:700 !important; letter-spacing:-0.01em; }}
-        .nk-h1 {{ font-weight:300 !important; font-size:clamp(30px,4vw,46px); margin:2px 0 6px; letter-spacing:-.02em; }}
-        .nk-h1 em {{ font-style:normal; font-weight:700; color:var(--voice); }}
+        .nk-h1 {{ font-family:{FONT_DISPLAY} !important; font-weight:400 !important; font-size:clamp(34px,4.4vw,54px); margin:2px 0 8px; letter-spacing:-.01em;
+            background:linear-gradient(96deg,#F7F2E4 0%,#E8D8A8 48%,#C9A24E 100%); -webkit-background-clip:text; background-clip:text; color:transparent !important; }}
+        .nk-h1 em {{ font-style:italic; font-weight:400; background:linear-gradient(92deg,#E3C98A 0%,#C9A24E 45%,#5FB7AE 100%);
+            -webkit-background-clip:text; background-clip:text; color:transparent; }}
         .nk-sub {{ color:var(--soft); font-weight:400; max-width:680px; margin:0 0 4px; }}
         .nk-section {{ font-family:{FONT_BODY}; font-weight:700; font-size:18px; color:var(--ink); margin:10px 0 6px; }}
         p, li, span, label, .stMarkdown {{ color: var(--ink); }}
@@ -384,7 +394,7 @@ def inject_css(theme: str, tab_order=None) -> None:
 
         /* KPI stat cards */
         .nk-row {{ display:grid; grid-template-columns:repeat(var(--kpi-cols,4),1fr); gap:14px; margin:6px 0 16px; }}
-        .nk-card {{ background:var(--card); border:1px solid var(--line2); border-radius:18px; padding:18px 20px 16px;
+        .nk-card {{ background:rgba(255,255,255,.055); backdrop-filter:blur(18px) saturate(1.15); -webkit-backdrop-filter:blur(18px) saturate(1.15); border:1px solid rgba(255,255,255,.13); border-radius:18px; padding:18px 20px 16px;
             box-shadow:var(--card-shadow); transition:transform .2s ease, box-shadow .2s ease;
             display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }}
         .nk-card:hover {{ transform:translateY(-2px); box-shadow:var(--card-shadow), 0 24px 50px -22px var(--shadow); }}
@@ -394,7 +404,7 @@ def inject_css(theme: str, tab_order=None) -> None:
         .nk-card .k-badge svg {{ display:block; }}
         .nk-card .k-label {{ font-family:{FONT_LABEL}; font-weight:700; font-size:10.5px; letter-spacing:.14em;
             text-transform:uppercase; color:var(--soft); margin-bottom:10px; }}
-        .nk-card .k-value {{ font-family:{FONT_DISPLAY}; font-weight:400; font-size:30px; color:var(--ink);
+        .nk-card .k-value {{ font-family:{FONT_DISPLAY}; font-weight:400; font-size:30px; color:var(--ink); background:linear-gradient(95deg,#F7F2E4 0%,#E3C98A 100%); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
             line-height:1; letter-spacing:-.01em; font-variant-numeric:tabular-nums; }}
         .nk-card .k-delta {{ font-family:{FONT_BODY}; font-size:12px; font-weight:600; margin-top:9px; }}
         .k-delta.dir-good {{ color:var(--pos); }} .k-delta.dir-bad {{ color:var(--neg); }} .k-delta.dir-flat {{ color:var(--faint); }}

@@ -89,7 +89,7 @@ def render(scoped: dict, theme: str, audience: str, split_label: str, split_col:
         c_t, c_split, c_type, c_unit = st.columns([0.36, 0.28, 0.18, 0.18], vertical_alignment="center")
         with c_t:
             st.markdown('<div class="chart-title">Portfolio split — click to focus</div>'
-                        '<div class="chart-sub">Change "Split by" here or in the sidebar · click a bar to focus</div>',
+                        '<div class="chart-sub">Change "Split by" here · click a bar to focus</div>',
                         unsafe_allow_html=True)
         with c_split:
             chosen_label = st.selectbox("Split by", all_labels, index=all_labels.index(split_label),

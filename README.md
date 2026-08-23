@@ -1,14 +1,16 @@
-# Data Lab Portfolio Analytics — demonstration
+# Data Lab Portfolio Analytics — public preview
 
-A portfolio & investor-reporting suite for a lending platform, built by
-Rihards Garančs / Data Lab as a working demonstration. **All data is
-synthetic** — generated on the fly with a fixed seed — so every number can
-be explored freely and none of it is real.
+A portfolio and investor-reporting suite for a lending platform, built by
+Rihards Garančs / Data Lab. This repository is the public preview: one
+demo dataset with a fixed seed, dark theme only, no sidebar — the visuals
+speak for themselves. Nothing here is client data.
 
-Nine views: overview, portfolio, cumulative flows, funds, projects, risk,
-activity, marketing & regulatory, and a public-site variant that hides
-internal figures. Filter by country, rating, loan type, status and period;
-drill into any chart; export tables.
+Eight views: overview, outstanding book, cumulative flows, activity,
+available funds, projects, risk & recovery, and an investor's own portfolio.
+Every chart has its own split and chart-type controls; tables export to CSV.
+
+Design: dark-teal surfaces, dark-gold accent, frosted-glass cards, Playfair
+Display headline with gradient lettering — the Atelier house style.
 
 Run locally:
 ```bash
@@ -16,5 +18,5 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Deployed at: share.streamlit.io (Streamlit Community Cloud).
-Part of https://rihardsgarancs.com/company
+Runs in the browser (stlite) at https://rihardsgarancs.com/demos/analytics —
+no server involved. Part of https://rihardsgarancs.com/company
