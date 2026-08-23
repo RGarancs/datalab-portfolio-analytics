@@ -5,9 +5,8 @@ Rihards Garančs / Data Lab. This repository is the public preview: one
 demo dataset with a fixed seed, dark theme only, no sidebar — the visuals
 speak for themselves. Nothing here is client data.
 
-Eight views: overview, outstanding book, cumulative flows, activity,
-available funds, projects, risk & recovery, and an investor's own portfolio.
-Every chart has its own split and chart-type controls; tables export to CSV.
+Four views: overview, outstanding book, cumulative flows and risk & recovery.
+Every chart has its own split and chart-type controls; tables export to CSV. No Faker, no Excel, no grid component — pandas, numpy and plotly only, so it runs in the browser.
 
 Design: dark-teal surfaces, dark-gold accent, frosted-glass cards, Playfair
 Display headline with gradient lettering — the Atelier house style.

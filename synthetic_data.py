@@ -30,7 +30,44 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-from faker import Faker
+
+
+class Names:
+    """Tiny seeded stand-in for Faker: person names, company names, cities.
+    Pure Python, no dependency, deterministic for a given numpy Generator."""
+
+    FIRST = ["Anna", "Lukas", "Sofie", "Jonas", "Eva", "Tomas", "Mila", "Pieter", "Hanna", "Marek",
+             "Ines", "Niels", "Clara", "Jakub", "Lena", "Rui", "Emma", "Matej", "Nora", "Seán",
+             "Ida", "Bram", "Laura", "Ciarán", "Julia", "Ole", "Tereza", "Joana", "Finn", "Maja"]
+    LAST = ["de Vries", "Novák", "Jensen", "Silva", "Bauer", "Murphy", "Horvat", "Peeters", "Dvořák",
+            "Nielsen", "Costa", "Huber", "Walsh", "Kovač", "Jansen", "Svoboda", "Larsen", "Pereira",
+            "Steiner", "Byrne", "Zupan", "Claes", "Bakker", "Černý", "Madsen", "Ferreira", "Gruber",
+            "Kelly", "Kralj", "Mertens"]
+    STEM = ["Nordhaven", "Alder", "Meridian", "Bluestone", "Harbour", "Linden", "Vantage", "Granite",
+            "Clearwater", "Orchard", "Keystone", "Brightwater", "Ashford", "Summit", "Beacon", "Copper",
+            "Atlas", "Lumen", "Marlow", "Fernhill", "Halcyon", "Ridgeway", "Sterling", "Willow"]
+    KIND = ["Logistics", "Engineering", "Foods", "Retail", "Energy", "Textiles", "Components",
+            "Packaging", "Construction", "Medical", "Software", "Mobility", "Agri", "Hospitality"]
+    SUFFIX = ["B.V.", "GmbH", "s.r.o.", "Lda.", "A/S", "Ltd", "d.o.o.", "N.V.", "S.A.", "Group"]
+    CITY = ["Utrecht", "Graz", "Brno", "Porto", "Aarhus", "Cork", "Maribor", "Ghent", "Leiden",
+            "Linz", "Olomouc", "Braga", "Odense", "Galway", "Celje", "Leuven", "Haarlem", "Salzburg",
+            "Plzeň", "Coimbra", "Aalborg", "Limerick", "Kranj", "Bruges", "Delft", "Innsbruck"]
+
+    def __init__(self, rng: np.random.Generator):
+        self.rng = rng
+
+    def _pick(self, seq):
+        return seq[int(self.rng.integers(len(seq)))]
+
+    def name(self) -> str:
+        return f"{self._pick(self.FIRST)} {self._pick(self.LAST)}"
+
+    def company(self) -> str:
+        return f"{self._pick(self.STEM)} {self._pick(self.KIND)} {self._pick(self.SUFFIX)}"
+
+    def city(self) -> str:
+        return self._pick(self.CITY)
+
 
 TODAY = pd.Timestamp("2026-08-01")
 
@@ -53,7 +90,7 @@ OUTSTANDING_STATUSES = ["Available", "Servicing", "Active", "Restructured", "In 
 TERMINAL_STATUSES = ["Repaid", "Defaulted"]
 
 
-def generate_clients(rng: np.random.Generator, fake: Faker, n: int) -> pd.DataFrame:
+def generate_clients(rng: np.random.Generator, fake: "Names", n: int) -> pd.DataFrame:
     rows = []
     for i in range(n):
         is_company = rng.random() < 0.75
@@ -70,7 +107,7 @@ def generate_clients(rng: np.random.Generator, fake: Faker, n: int) -> pd.DataFr
     return df
 
 
-def generate_investors(rng: np.random.Generator, fake: Faker, n: int) -> pd.DataFrame:
+def generate_investors(rng: np.random.Generator, fake: "Names", n: int) -> pd.DataFrame:
     days_back = rng.triangular(0, 45, 1825, size=n)  # skewed toward recent -> growth curve
     rows = []
     for i in range(n):
@@ -209,7 +246,7 @@ def _one_stage(rng, fake, client, ptype, country, pid, group_id, group_name,
     }
 
 
-def generate_projects(rng: np.random.Generator, fake: Faker, clients: pd.DataFrame, n: int) -> pd.DataFrame:
+def generate_projects(rng: np.random.Generator, fake: "Names", clients: pd.DataFrame, n: int) -> pd.DataFrame:
     """Projects are funded in STAGES that belong to a project GROUP (a single
     development can be raised across several sequential tranches). Most groups
     are single-stage; some run 2-4 stages. `total_stages` is the planned count,
@@ -359,8 +396,7 @@ def generate_secondary_market(rng: np.random.Generator, investments: pd.DataFram
 def generate_dataset(seed: int = 2026, n_clients: int = 48, n_investors: int = 3600, n_projects: int = 164) -> dict:
     """Orchestrator: builds all six linked tables for one consistent, seeded scenario."""
     rng = np.random.default_rng(seed)
-    fake = Faker()
-    Faker.seed(seed)
+    fake = Names(np.random.default_rng(seed + 7))
 
     clients = generate_clients(rng, fake, n_clients)
     investors = generate_investors(rng, fake, n_investors)

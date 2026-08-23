@@ -19,12 +19,11 @@ import os
 import pandas as pd
 import streamlit as st
 
-from theme import PALETTES, inject_css, render_masthead, render_kpi_row, render_chips, section_title, section_header
+from theme import PALETTES, inject_css, render_masthead, render_kpi_row, render_chips, section_header
 from synthetic_data import generate_dataset
 from metrics import CATALOG, DEFAULT_KPIS, AUDIENCE_WORD, build_kpis, kpi_items, tab_kpi_items, build_sparklines
 import periods
-from views import (overview, portfolio, cumulative, activity, funds,
-                   projects_view, risk, marketing_regulatory, analytics, my_portfolio, public)
+from views import overview, portfolio, cumulative, risk
 from dims import SPLIT_DIMS
 from ui import set_deep_teal, deep_dive
 
@@ -44,67 +43,18 @@ TODAY = pd.Timestamp("2026-07-13")
 SIZE_PRESETS = {
     "Preview": dict(n_clients=25, n_projects=80, n_investors=1200),
 }
-SIZE_SHORT = {"Preview": "Preview"}
 PREVIEW_SEED = 42
 
 # tab identity (icon key -> label). Icon order must match the rendered tab order.
-BASE_TAB_ORDER = ["overview", "outstanding", "cumulative", "activity", "funds", "projects", "risk", "portfolio"]
+BASE_TAB_ORDER = ["overview", "outstanding", "cumulative", "risk"]
 TAB_LABELS = {"overview": "Overview", "outstanding": "Outstanding", "cumulative": "Cumulative",
-              "activity": "Activity", "funds": "Available Funds", "projects": "Projects",
-              "risk": "Risk & Recovery", "portfolio": "My Portfolio"}
+              "risk": "Risk & Recovery"}
 
 
 def tab_order_for(audience: str):
-    # Investor-Facing opens on My Portfolio (their own book is the main screen).
-    if audience == "Investor-Facing":
-        return ["portfolio"] + [k for k in BASE_TAB_ORDER if k != "portfolio"]
-    return BASE_TAB_ORDER
+    return list(BASE_TAB_ORDER)
 
 
-
-
-AUDIENCE_MATRIX_MD = """
-| Section | Internal | Investor-Facing | Public Website |
-|---|---|---|---|
-| **Layout** | Full 7-tab dashboard | Full 7-tab dashboard (same as Internal) | Separate trimmed page (hero + 3 charts + glossary) — no tabs |
-| Overview — investor & project pipeline, split explorer | ✅ | ✅ | ✕ (not on trimmed page) |
-| Outstanding — status, new volume, explorer | ✅ | ✅ | ✕ |
-| Cumulative — combo chart, matrix table, snapshot | ✅ | ✅ | ✕ (funded-volume chart only, on trimmed page) |
-| Activity — flows, top investors, resale market | ✅ | ✅ | ✕ |
-| Available Funds — net deposits, forecast, pipeline | ✅ | ✅ | ✕ |
-| Projects — grouping, explorer, grid | ✅ | ✅ | ✕ |
-| My Portfolio — per-investor drill-down | ✅ | ✅ | ✕ |
-| ⑥ Risk & Recovery — distressed book, recovery time | ✅ | ✅ | ✕ |
-| ⑥ Risk — Actual vs Budget, peer benchmark, focus | ✅ | ✕ hidden | ✕ |
-| ⑦ Marketing (illustrative) | ✅ | ✅ | ✕ |
-| ⑧ Regulatory (illustrative) | ✅ | ✅ | ✕ |
-| ⑨ Analytics — concentration, velocity, retention, WAL, cash-flow | ✅ | ✅ | ✕ |
-| ⑨ Analytics — Expected loss | ✅ | ✅ | ✕ |
-| KPI: default rate, avg investment, avg LTC, deposits, net deposits | ✅ | ✅ | ✕ (not on trimmed page) |
-| Trimmed page: 8 hero KPIs (funded, interest paid, AROI, outstanding, default rate, LTC, investors, repaid loans) | — | — | ✅ |
-| Trimmed page: funded-volume chart, status donut, LTC distribution, glossary | — | — | ✅ |
-
-**Today, Internal and Investor-Facing are nearly identical** — the only current difference is the
-Risk tab's Actual-vs-Budget / peer-benchmark / focus-allocation box (Internal only). Tell me what
-else to add or remove for Investor-Facing and for Public, and I'll wire the gating.
-"""
-
-DATA_DICTIONARY_MD = """
-**Entity graph**
-```
-clients (borrowers) 1───< projects
-investors           1───< investments >───1 projects
-investors           1───< transactions        (wallet: deposits / withdrawals)
-investments          1───0..1 secondary_market (resale listing)
-```
-- **projects** — loans/deals, funded in **stages** within a **group**. `loan_category`
-  (Real Estate / Business), `vintage`, `ltc_band`, `size_band`, `maturity_bucket`.
-- **investors** — `investor_tier` from wallet balance (Retail <€25k · HNWI €25–250k ·
-  Professional >€250k), `wallet_balance`, `identified` (KYC), `active`, `last_login`.
-- **investments / transactions / secondary_market** — bridge + wallet + resale.
-
-Full column dictionary + Excel model: `README.md` · `data_model.xlsx`.
-"""
 
 
 # Set DATALAB_DATA to a .xlsx workbook (sheet per table) or a folder of {table}.xlsx
@@ -251,12 +201,6 @@ def main() -> None:
     word = "Preview"
     render_masthead("Data Lab <em>Portfolio</em> analytics")
 
-    # ---- PUBLIC: trimmed, credibility-first layout (hero + 3 charts + glossary) ----
-    if audience == "Public Website":
-        render_chips([("Report", "Public"), ("Book", loan_cat), ("As of", str(window_end.date()))])
-        public.render(asof, theme, window_end)
-        return
-
     # ---- active-filter chips ----
     chips = [("Report", word), ("Period", periods.window_label(period, window_start, window_end))]
     if show_delta:
@@ -291,14 +235,6 @@ def main() -> None:
         overview.render(asof, theme, audience, split_label, split_col, split_table)
         with deep_dive("Break the book down · hover to drill in"):
             overview.render_hover_explorer(asof, split_label, split_col, split_table, theme)
-        st.markdown('<hr class="nk-hr"/>', unsafe_allow_html=True)
-        section_title("More views")
-        with st.expander("⑦ Marketing — website & acquisition funnel (illustrative)"):
-            marketing_regulatory.render_marketing(asof, theme, audience, window_end)
-        with st.expander("⑧ Regulatory — KYC / AML / filings (illustrative)"):
-            marketing_regulatory.render_regulatory(asof, theme, audience, window_end)
-        with st.expander("⑨ Analytics — concentration · expected loss · maturity · recovery · velocity · retention · WAL · cash-flow"):
-            analytics.render(asof, theme, audience, window_end)
 
     def _outstanding():
         tab_kpis("portfolio")
@@ -308,28 +244,11 @@ def main() -> None:
         tab_kpis("cumulative")
         cumulative.render(asof, theme, audience, window_end, kpis, (window_start, window_end), period)
 
-    def _activity():
-        tab_kpis("activity")
-        activity.render(windowed, theme, audience, window_end, base=asof)
-
-    def _funds():
-        tab_kpis("funds")
-        funds.render(windowed, theme, audience, window_end, base=asof)
-
-    def _projects():
-        tab_kpis("projects")
-        projects_view.render(asof, theme, audience, split_label, split_col if split_table == "projects" else "rating")
-
     def _risk():
         tab_kpis("risk")
         risk.render(asof, theme, audience, window_end)
 
-    def _portfolio():
-        my_portfolio.render(asof, theme, audience)
-
-    renderers = {"overview": _overview, "outstanding": _outstanding, "cumulative": _cumulative,
-                 "activity": _activity, "funds": _funds, "projects": _projects, "risk": _risk,
-                 "portfolio": _portfolio}
+    renderers = {"overview": _overview, "outstanding": _outstanding, "cumulative": _cumulative, "risk": _risk}
     order = tab_order_for(audience)
     tab_objs = st.tabs([TAB_LABELS[k] for k in order])
     for k, tabobj in zip(order, tab_objs):

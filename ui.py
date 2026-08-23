@@ -85,33 +85,13 @@ def render_legend(rows: list[tuple[str, str, str]]) -> None:
 _export_seq = itertools.count()
 
 
-@st.cache_data(show_spinner=False, max_entries=64)
-def _excel_bytes(csv_text: str) -> bytes:
-    """Build the .xlsx once per unique table payload and cache it, so toggling
-    unrelated widgets does not re-serialise every table's workbook each rerun
-    (that eager work was the main cause of the sluggish button response)."""
-    import io
-    df = pd.read_csv(io.StringIO(csv_text), dtype=str, keep_default_na=False)
-    buf = io.BytesIO()
-    with pd.ExcelWriter(buf, engine="openpyxl") as w:
-        df.to_excel(w, index=False, sheet_name="Data")
-    return buf.getvalue()
-
-
 def _export_popover(df: pd.DataFrame, name: str) -> None:
-    """Just the CSV / Excel download popover (Excel cached)."""
+    """CSV download button."""
     tid = next(_export_seq)
     csv_text = df.to_csv(index=False)
-    with st.popover("\u2913 Export", use_container_width=True):
-        st.download_button("CSV", csv_text.encode("utf-8"),
-                           file_name=f"{name}.csv", mime="text/csv",
-                           key=f"exp_csv_{tid}", use_container_width=True)
-        try:
-            st.download_button("Excel", _excel_bytes(csv_text), file_name=f"{name}.xlsx",
-                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                               key=f"exp_xlsx_{tid}", use_container_width=True)
-        except Exception:
-            st.caption("Excel export unavailable (install openpyxl).")
+    st.download_button("\u2913 CSV", csv_text.encode("utf-8"),
+                       file_name=f"{name}.csv", mime="text/csv",
+                       key=f"exp_csv_{tid}", use_container_width=True)
 
 
 def _export_controls(df: pd.DataFrame, name: str) -> None:
@@ -199,32 +179,11 @@ def column_picker(all_cols, key, default=None, label="Columns"):
 
 def aggrid_table(df, group_cols=None, key=None, height=380, csv_name="table.csv",
                  sum_cols=None, default_expanded=0):
-    """AG Grid table: sortable / filterable / drill-down (row grouping, with a
-    "+" to expand each level) + a CSV download. `sum_cols` are numeric columns
-    that roll up (SUM) at every group level -- essential for a "matrix" table
-    where each level (Year -> Quarter -> Month -> Week -> Day) shows a total.
-    Falls back to a plain dataframe if the component is unavailable."""
+    """Sortable table with a CSV download (the AG Grid component was dropped to
+    keep the in-browser build small)."""
     st.download_button("Download CSV", df.to_csv(index=False).encode("utf-8"),
                        file_name=csv_name, key=(str(key) + "_csv"), use_container_width=False)
-    try:
-        from st_aggrid import AgGrid, GridOptionsBuilder
-        gb = GridOptionsBuilder.from_dataframe(df)
-        gb.configure_default_column(sortable=True, filter=True, resizable=True, flex=1, minWidth=110)
-        for c in (group_cols or []):
-            if c in df.columns:
-                gb.configure_column(c, rowGroup=True, hide=True)
-        for c in (sum_cols or []):
-            if c in df.columns:
-                gb.configure_column(c, aggFunc="sum", type=["numericColumn"],
-                                    valueFormatter="x.toLocaleString(undefined,{maximumFractionDigits:0})")
-        gb.configure_grid_options(animateRows=True, groupDisplayType="groupRows",
-                                  groupDefaultExpanded=default_expanded)
-        AgGrid(df, gridOptions=gb.build(), height=height, theme="balham",
-               enable_enterprise_modules=bool(group_cols), allow_unsafe_jscode=True,
-               fit_columns_on_grid_load=True, key=key)
-    except Exception as e:  # pragma: no cover - component/runtime specific
-        st.caption(f"Interactive grid unavailable ({type(e).__name__}); showing plain table.")
-        st.dataframe(df, hide_index=True, width="stretch")
+    st.dataframe(df, hide_index=True, width="stretch")
 
 
 def build_split_payload(dims: dict, tables: dict, id_col_by_table: dict, name_col_by_table: dict,

@@ -48,7 +48,7 @@ TAB_ICONS: dict[str, str] = {
 }
 
 # tab order after Risk & Recovery moved into the Overview "More views" list
-TAB_ICON_ORDER = ["overview", "outstanding", "cumulative", "activity", "funds", "projects", "risk", "portfolio"]
+TAB_ICON_ORDER = ["overview", "outstanding", "cumulative", "risk"]
 
 
 def _icon_uri(name: str) -> str:
