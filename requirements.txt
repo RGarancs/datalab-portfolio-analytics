@@ -3,16 +3,5 @@ plotly>=6.0
 pandas>=2.2,<3.0
 numpy>=1.26,<2.3
 faker>=25.0
-openpyxl>=3.1          # build_excel_model.py -> data_model.xlsx
-
-# Version 2 (bespoke) dashboard — Shiny for Python
-shiny>=1.0
-shinywidgets>=0.3
-streamlit-aggrid>=1.0   # AG Grid tables (drill-down, sort, CSV)
-
-# Pinned: pyarrow 21-25 segfaults on repeated st.dataframe() calls on this
-# machine (native mimalloc allocator crash inside pyarrow's macOS wheel --
-# reproduced with a 3-row DataFrame in a bare Streamlit script, unrelated
-# to this app's code). 18.1.0 is confirmed stable; bump only after
-# re-running smoke_test.py.
-pyarrow==18.1.0
+openpyxl>=3.1
+streamlit-aggrid>=1.0
