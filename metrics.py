@@ -1,11 +1,11 @@
 """metrics.py -- KPI catalog, stock/flow computation, and number formatting.
 
 Two kinds of KPI:
-    * stock  -- a balance "as of" a date (outstanding book, # investors, avg
-                return). Delta = value today minus value at the start of the
+    * stock  -- a balance "as of" a date (loan book, # customers, portfolio
+                yield). Delta = value today minus value at the start of the
                 window (how much the balance moved over the period).
-    * flow   -- an amount that accrues within a window (funded this period, new
-                investors, deposits). Delta = this window vs the previous
+    * flow   -- an amount that accrues within a window (originated this period,
+                new customers, deposits in). Delta = this window vs the previous
                 equal-length window.
 
 All computations run on the dimension-filtered ("scoped") tables, so sidebar
@@ -16,29 +16,29 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-PLATFORM_FEE = 0.10  # platform keeps 10% of gross interest; investors get the rest
+COST_OF_FUNDS = 0.35  # share of gross loan interest paid away as deposit interest & funding cost
 
 ALL = {"Internal", "Investor-Facing", "Public Website"}
 INT_INV = {"Internal", "Investor-Facing"}
-OUTSTANDING_STATUSES = ["Servicing", "Active", "Restructured", "In Recovery"]
+OUTSTANDING_STATUSES = ["In payment", "In risk mitigation", "Collateralized", "Sold to reinsurance"]
 
 # key -> label, kind, fmt, higher_is_better, audiences
 CATALOG: dict[str, dict] = {
-    "outstanding":       dict(label="Outstanding Portfolio",   kind="stock", fmt="eur", hib=True,  audiences=ALL),
-    "total_funded":      dict(label="Total Funded (cum.)",     kind="stock", fmt="eur", hib=True,  audiences=ALL),
-    "funded_period":     dict(label="Funded (period)",         kind="flow",  fmt="eur", hib=True,  audiences=ALL),
-    "avg_return":        dict(label="Avg. Return (weighted)",  kind="stock", fmt="pct", hib=True,  audiences=ALL),
+    "outstanding":       dict(label="Loan Book (outstanding)", kind="stock", fmt="eur", hib=True,  audiences=ALL),
+    "total_funded":      dict(label="Originated (cumulative)",kind="stock", fmt="eur", hib=True,  audiences=ALL),
+    "funded_period":     dict(label="Originated (period)",    kind="flow",  fmt="eur", hib=True,  audiences=ALL),
+    "avg_return":        dict(label="Portfolio Yield",        kind="stock", fmt="pct", hib=True,  audiences=ALL),
     "avg_loan_term":     dict(label="Avg. Loan Term",          kind="stock", fmt="months", hib=True, audiences=ALL),
-    "interest_paid":     dict(label="Interest Paid (net)",     kind="stock", fmt="eur", hib=True,  audiences=ALL),
-    "platform_fees":     dict(label="Platform Fees",           kind="stock", fmt="eur", hib=True,  audiences=INT_INV),
+    "interest_paid":     dict(label="Net Interest Income",    kind="stock", fmt="eur", hib=True,  audiences=ALL),
+    "platform_fees":     dict(label="Cost of Funds",          kind="stock", fmt="eur", hib=True,  audiences=INT_INV),
     "default_rate_12m":  dict(label="12M Default Rate",        kind="stock", fmt="pct", hib=False, audiences=INT_INV),
-    "n_investors":       dict(label="Total Investors",         kind="stock", fmt="int", hib=True,  audiences=ALL),
-    "new_investors":     dict(label="New Investors (period)",  kind="flow",  fmt="int", hib=True,  audiences=ALL),
-    "avg_investment":    dict(label="Avg. Investment (period)", kind="flow", fmt="eur", hib=True,  audiences=INT_INV),
-    "deposits_period":   dict(label="Deposits (period)",       kind="flow",  fmt="eur", hib=True,  audiences=INT_INV),
-    "net_deposits_period": dict(label="Net Deposits (period)", kind="flow",  fmt="eur", hib=True,  audiences=INT_INV),
-    "avg_ltv":           dict(label="Avg. LTC",                kind="stock", fmt="pct", hib=False, audiences=INT_INV),
-    "n_projects":        dict(label="Total Projects",          kind="stock", fmt="int", hib=True,  audiences=ALL),
+    "n_investors":       dict(label="Total Customers",        kind="stock", fmt="int", hib=True,  audiences=ALL),
+    "new_investors":     dict(label="New Customers (period)", kind="flow",  fmt="int", hib=True,  audiences=ALL),
+    "avg_investment":    dict(label="Avg. Disbursement (period)", kind="flow", fmt="eur", hib=True,  audiences=INT_INV),
+    "deposits_period":   dict(label="Deposits In (period)",   kind="flow",  fmt="eur", hib=True,  audiences=INT_INV),
+    "net_deposits_period": dict(label="Net Deposit Flow (period)",kind="flow",  fmt="eur", hib=True,  audiences=INT_INV),
+    "avg_ltv":           dict(label="Avg. LTV (secured)",     kind="stock", fmt="pct", hib=False, audiences=INT_INV),
+    "n_projects":        dict(label="Total Loans",            kind="stock", fmt="int", hib=True,  audiences=ALL),
 }
 
 DEFAULT_KPIS = ["outstanding", "total_funded", "funded_period", "avg_return",
@@ -129,9 +129,9 @@ def compute_stock(scoped: dict, as_of: pd.Timestamp) -> dict:
     repaid = p[p["status"] == "Repaid"]
     gross_interest = float((repaid["funded_amount"] * repaid["interest_rate"] / 100
                             * repaid["term_months"] / 12).sum())
-    platform_fees = gross_interest * PLATFORM_FEE
+    platform_fees = gross_interest * COST_OF_FUNDS
     interest_paid = gross_interest - platform_fees
-    aroi_net = _weighted(funded["interest_rate"], funded["funded_amount"]) * (1 - PLATFORM_FEE)
+    aroi_net = _weighted(funded["interest_rate"], funded["funded_amount"]) * (1 - COST_OF_FUNDS)
 
     return {
         "outstanding": float(outstanding),
@@ -141,7 +141,8 @@ def compute_stock(scoped: dict, as_of: pd.Timestamp) -> dict:
         "aroi_net": aroi_net,
         "interest_paid": interest_paid,
         "platform_fees": platform_fees,
-        "avg_ltv": _weighted(p["ltc"], p["funded_amount"].clip(lower=1)),
+        "avg_ltv": _weighted(p.loc[p["ltc"].notna(), "ltc"],
+                             p.loc[p["ltc"].notna(), "funded_amount"].clip(lower=1)),
         "n_projects": int(p["project_id"].nunique()),
         "n_investors": int(investors.loc[investors["registration_date"] <= as_of, "investor_id"].nunique()),
         "default_rate_12m": default_rate,
@@ -226,25 +227,23 @@ AUDIENCE_WORD = {"Internal": "Internal", "Investor-Facing": "Investor", "Public 
 
 
 def pipeline_counts(investors, as_of) -> dict:
-    """Investor funnel as of a date: Registered -> Identified (KYC) -> Active (funded wallet)."""
+    """Customer funnel as of a date: Onboarded -> KYC verified -> With deposit account."""
     reg = investors[investors["registration_date"] <= pd.Timestamp(as_of)]
     return {
-        "Registered": int(len(reg)),
-        "Identified": int(reg["identified"].sum()) if "identified" in reg.columns else int(len(reg)),
-        "Active": int(reg["active"].sum()) if "active" in reg.columns else int(len(reg)),
+        "Onboarded": int(len(reg)),
+        "KYC verified": int(reg["identified"].sum()) if "identified" in reg.columns else int(len(reg)),
+        "With deposit account": int(reg["active"].sum()) if "active" in reg.columns else int(len(reg)),
     }
 
 
-def project_pipeline_counts(projects: pd.DataFrame, as_of, by: str = "Stages") -> dict:
-    """Project funnel as of a date: Total / Active / Servicing (+ avg size).
-    `by="Projects"` collapses each project (all its stages) to its current (latest) stage."""
+def loan_pipeline_counts(projects: pd.DataFrame, as_of, by: str = "Loans") -> dict:
+    """Loan-book funnel as of a date: originated / in payment / distressed."""
     df = projects[projects["start_date"] <= pd.Timestamp(as_of)]
-    if by == "Projects" and "current_stage" in df.columns and "stage_number" in df.columns:
-        df = df[df["stage_number"] == df["current_stage"]]
+    distressed = ["In risk mitigation", "Collateralized", "Sold to reinsurance", "Defaulted"]
     return {
-        "Total": int(len(df)),
-        "Active": int((df["status"] == "Active").sum()),
-        "Servicing": int((df["status"] == "Servicing").sum()),
+        "Originated": int(len(df)),
+        "In payment": int((df["status"] == "In payment").sum()),
+        "Distressed": int(df["status"].isin(distressed).sum()),
         "avg_size": float(df["funded_amount"].mean()) if len(df) else 0.0,
     }
 

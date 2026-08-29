@@ -1,9 +1,10 @@
 """
-app.py -- Data Lab Portfolio Analytics (Streamlit)
+app.py -- Data Lab Banking Analytics (Streamlit)
 
-Interactive reporting dashboard on synthetic real-estate-lending data, styled to
-the Data Lab design language. Swap `synthetic_data.generate_dataset()` for a
-loader over the real export once it exists.
+Interactive reporting dashboard for a retail and business bank -- loan book,
+customers, cumulative flows and risk -- styled to the Data Lab design language.
+Swap `synthetic_data.generate_dataset()` for a loader over a real core-banking
+export to run it on live data.
 
 Controls live in the left pane. The reporting period applies everywhere: flow
 charts (Activity, Available Funds) use the window; stock charts are shown as of
@@ -27,21 +28,21 @@ from views import overview, portfolio, cumulative, risk
 from dims import SPLIT_DIMS
 from ui import set_deep_teal, deep_dive
 
-st.set_page_config(page_title="Data Lab Portfolio Analytics", page_icon="◆",
+st.set_page_config(page_title="Data Lab Banking Analytics", page_icon="◆",
                    layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown(
     '<div class="dl-demo-banner" style="font:500 12px/1.5 Manrope,Helvetica Neue,Arial,sans-serif;letter-spacing:.04em;'
     'padding:9px 16px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);margin:-8px 0 14px;color:#cfdad8">'
-    '<b>Data Lab · demonstration.</b> A portfolio and investor-reporting suite for a lending platform. '
-    'Everything is interactive — filter, drill down, export. '
+    '<b>Data Lab · demonstration.</b> A retail and business banking dashboard: loan book, customers, risk. '
+    'Everything is interactive — split, drill down, export. '
     '<a href="https://rihardsgarancs.com/company" style="color:#C9A24E;text-decoration:none">← rihardsgarancs.com/company</a></div>',
     unsafe_allow_html=True)
 
 TODAY = pd.Timestamp("2026-07-13")
 
 SIZE_PRESETS = {
-    "Preview": dict(n_clients=25, n_projects=80, n_investors=1200),
+    "Preview": dict(n_clients=240, n_projects=2000, n_investors=6000),
 }
 PREVIEW_SEED = 42
 
@@ -185,8 +186,6 @@ def main() -> None:
     )
     if loan_cat != "All":
         scoped = _cascade_projects(scoped, scoped["projects"][scoped["projects"].loan_category == loan_cat])
-    if not include_infunding:
-        scoped = _cascade_projects(scoped, scoped["projects"][~scoped["projects"].status.isin(["Available", "Servicing"])])
     if focus and focus != "All":
         scoped = apply_focus(scoped, split_table, split_col, focus)
 
@@ -199,7 +198,7 @@ def main() -> None:
 
     # ---- masthead (dynamic name) ----
     word = "Preview"
-    render_masthead("Data Lab <em>Portfolio</em> analytics")
+    render_masthead("Data Lab <em>Banking</em> analytics")
 
     # ---- active-filter chips ----
     chips = [("Report", word), ("Period", periods.window_label(period, window_start, window_end))]
@@ -207,7 +206,7 @@ def main() -> None:
         chips.append(("Compare vs", periods.comparison_label(period, prev_start, prev_end)))
     if focus and focus != "All":
         chips.append(("Focus", focus))
-    if not include_infunding:
+    if False:
         chips.append(("In-funding", "excluded"))
     if len(countries) < len(all_countries):
         chips.append(("Country", ", ".join(countries) if len(countries) <= 3 else f"{len(countries)}/{len(all_countries)}"))
@@ -215,8 +214,8 @@ def main() -> None:
         chips.append(("Rating", ", ".join(ratings) if len(ratings) <= 4 else f"{len(ratings)}/{len(all_ratings)}"))
     if set(methods) != {"Auto", "Manual"}:
         chips.append(("Method", ", ".join(methods) or "none"))
-    chips.append(("Projects", f"{len(asof['projects']):,}"))
-    chips.append(("Investors", f"{len(asof['investors']):,}"))
+    chips.append(("Loans", f"{len(asof['projects']):,}"))
+    chips.append(("Customers", f"{len(asof['investors']):,}"))
     render_chips(chips)
 
     # ---- KPIs ----
@@ -228,10 +227,10 @@ def main() -> None:
 
     def _overview():
         render_kpi_row(kpi_items(kpis, selected_kpis, audience, sparks)[0], columns=4)
-        section_header("Pipelines", "Investor & project funnels · as of period end")
+        section_header("Pipelines", "Customer and loan-book funnels · as of period end")
         overview.render_pipeline(asof["investors"], scoped["investments"], window_end, theme)
         overview.render_project_pipeline(asof["projects"], window_end, theme)
-        section_header("Portfolio split", "Break the book down · click a bar to focus")
+        section_header("Loan book split", "Break the book down · click a bar to focus")
         overview.render(asof, theme, audience, split_label, split_col, split_table)
         with deep_dive("Break the book down · hover to drill in"):
             overview.render_hover_explorer(asof, split_label, split_col, split_table, theme)

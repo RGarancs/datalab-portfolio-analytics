@@ -64,9 +64,8 @@ def atelier_colorway(theme: str) -> list[str]:
 def status_colorway(theme: str) -> dict[str, str]:
     p = PALETTES[theme]
     return {
-        "Repaid": p["voice"], "Active": p["gold"], "Recovery": p["deep"],
-        "Available": p["faint"], "Restructured": "#E8944A", "In Recovery": p["neg"],
-        "Defaulted": p["default"],
+        "In payment": p["gold"], "Repaid": p["voice"], "In risk mitigation": p["deep"],
+        "Collateralized": "#E8944A", "Sold to reinsurance": p["soft"], "Defaulted": p["neg"],
     }
 
 
@@ -312,7 +311,7 @@ def render_chips(chips: list[tuple[str, str]]) -> None:
 def render_masthead(title_html: str, subtitle: str | None = None) -> None:
     sub = f'<p class="nk-sub">{subtitle}</p>' if subtitle else ""
     st.markdown(
-        f'<span class="nk-eyebrow">Data Lab · Portfolio analytics</span>'
+        f'<span class="nk-eyebrow">Data Lab · Banking analytics</span>'
         f'<h1 class="nk-h1">{title_html}</h1>{sub}',
         unsafe_allow_html=True,
     )

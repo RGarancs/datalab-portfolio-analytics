@@ -36,13 +36,13 @@ def render(scoped: dict, theme: str, audience: str, today, kpis: dict, window, p
         st.info("No projects match the current filters.")
         return
 
-    funded = projects[projects.status != "Available"]
+    funded = projects
     repaid = _add_gross(projects[projects.status == "Repaid"])
     defaulted = projects[projects.status == "Defaulted"]
     c = atelier_colorway(theme)
 
     with chart_card():
-        mode = card_header("Cumulative funded vs repaid vs defaulted",
+        mode = card_header("Cumulative originated vs repaid vs defaulted",
                            subtitle="Since inception · shaded band = selected window",
                            options=["Cumulative", "Per-year", "Per-quarter", "Per-month"], default="Cumulative",
                            key="cum_mode", label="CumMode",
@@ -56,8 +56,8 @@ def render(scoped: dict, theme: str, audience: str, today, kpis: dict, window, p
             defaulted_cum = _cumulative(defaulted, "default_date", "funded_amount", index)
             current_cum = (funded_cum - repaid_cum - defaulted_cum).clip(lower=0)
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=index, y=funded_cum.values, name="Total funded", line=dict(color=c[0], width=3)))
-            fig.add_trace(go.Scatter(x=index, y=current_cum.values, name="Current loans (outstanding)", line=dict(color=c[1], width=3)))
+            fig.add_trace(go.Scatter(x=index, y=funded_cum.values, name="Originated", line=dict(color=c[0], width=3)))
+            fig.add_trace(go.Scatter(x=index, y=current_cum.values, name="Loan book (outstanding)", line=dict(color=c[1], width=3)))
             fig.add_trace(go.Scatter(x=index, y=repaid_cum.values, name="Repaid principal", line=dict(color=c[4], width=3)))
             fig.add_trace(go.Scatter(x=index, y=defaulted_cum.values, name="Defaulted", line=dict(color=c[3], width=2, dash="dot")))
             if period != "Snapshot" and window is not None:
@@ -75,9 +75,9 @@ def render(scoped: dict, theme: str, audience: str, today, kpis: dict, window, p
             current_line = (fb.cumsum() - rb.cumsum() - db.cumsum()).clip(lower=0)
             xlabels = [str(p) for p in all_idx]
             fig = go.Figure()
-            fig.add_trace(go.Bar(x=xlabels, y=fb.values, name="Total funded (bar)", marker_color=c[0],
+            fig.add_trace(go.Bar(x=xlabels, y=fb.values, name="Originated", marker_color=c[0],
                                  text=[format_number(v, "eur") for v in fb.values], textposition="outside", cliponaxis=False))
-            fig.add_trace(go.Scatter(x=xlabels, y=current_line.values, name="Current loans (outstanding)",
+            fig.add_trace(go.Scatter(x=xlabels, y=current_line.values, name="Loan book (outstanding)",
                                      mode="lines+markers", line=dict(color=c[1], width=3), marker=dict(size=7)))
             fig.add_trace(go.Scatter(x=xlabels, y=rb.values, name="Repaid principal", mode="lines+markers",
                                      line=dict(color=c[4], width=3), marker=dict(size=7)))
@@ -92,9 +92,9 @@ def render(scoped: dict, theme: str, audience: str, today, kpis: dict, window, p
     render_kpi_row(items, columns=min(3, len(items)) or 1)
 
     # ---- deep dive (collapsible): funded / repaid / defaulted by period ----
-    with deep_dive("Funded vs repaid vs defaulted by origination period"):
+    with deep_dive("Originated vs repaid vs defaulted by origination period"):
         with chart_card(deep=True):
-            gran = card_header("By origination period", subtitle="Funded, repaid, defaulted, default rate",
+            gran = card_header("By origination period", subtitle="Originated, repaid, defaulted, default rate",
                                options=["By year", "By quarter", "By month"], default="By year",
                                key="cum_table_gran", label="CumTableGran",
                                help="Group the table by year, by quarter (2024Q1) or by month (2024-01).")
@@ -107,9 +107,9 @@ def render(scoped: dict, theme: str, audience: str, today, kpis: dict, window, p
             for pr in periods_idx:
                 fv = float(f_by.get(pr, 0)); dv = float(d_by.get(pr, 0))
                 fvals.append(fv)
-                rows.append({"Period": str(pr), "Funded": format_number(fv, "eur"),
+                rows.append({"Period": str(pr), "Originated": format_number(fv, "eur"),
                              "Repaid": format_number(float(r_by.get(pr, 0)), "eur"),
                              "Defaulted": format_number(dv, "eur"),
                              "Default %": f"{(dv/fv*100 if fv else 0):.1f}%"})
             render_table(pd.DataFrame(rows), num_cols={"Repaid", "Defaulted", "Default %"},
-                         bar_frac={"Funded": norm(fvals)}, max_height=430, export_name="cumulative_by_period")
+                         bar_frac={"Originated": norm(fvals)}, max_height=430, export_name="cumulative_by_period")

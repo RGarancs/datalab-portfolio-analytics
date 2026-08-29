@@ -21,7 +21,7 @@ def _on_newvol_click() -> None:
         pass
 
 
-OUTSTANDING = ["Active", "Available", "Servicing", "Restructured", "In Recovery"]
+OUTSTANDING = ["In payment", "In risk mitigation", "Collateralized", "Sold to reinsurance"]
 
 
 def render(projects: pd.DataFrame, theme: str, audience: str, split_col: str | None = None) -> None:
@@ -77,13 +77,14 @@ def render(projects: pd.DataFrame, theme: str, audience: str, split_col: str | N
         st.markdown('<div class="chart-title">Explore the outstanding book</div>'
                     '<div class="chart-sub">Change "Split by" inside the chart · hover for KPIs + top 10 loans</div>',
                     unsafe_allow_html=True)
-        kpi_opts = ["Funded €", "Loans", "Avg rate", "Avg LTC"]
+        kpi_opts = ["Exposure €", "Loans", "Avg rate", "Avg LTV"]
         chosen = kpi_opts
 
         def extra_kpis(table, sub):
             if not len(sub):
                 return []
-            out = {"Avg rate": f"{sub['interest_rate'].mean():.1f}%", "Avg LTC": f"{sub['ltc'].mean():.0f}%"}
+            out = {"Avg rate": f"{sub['interest_rate'].mean():.1f}%",
+                   "Avg LTV": ("—" if sub["ltc"].isna().all() else f"{sub['ltc'].mean():.0f}%")}
             return [[k, out[k]] for k in chosen if k in out]
 
         payload = build_split_payload(
@@ -96,10 +97,10 @@ def render(projects: pd.DataFrame, theme: str, audience: str, split_col: str | N
                                         panel_title="Segment detail", key="outstanding_explorer")
 
     # ---- deep dive (collapsible): new volume, status split & detail ----
-    with deep_dive("New volume, status split & detail"):
+    with deep_dive("New lending, status split & detail"):
         if len(projects):
             with chart_card(deep=True):
-                view = card_header("New volume added to book", subtitle="Monthly (12m) · Weekly (52w) · Daily (90d) · Cumulative",
+                view = card_header("New lending added to the book", subtitle="Monthly (12m) · Weekly (52w) · Daily (90d) · Cumulative",
                                    options=["Monthly", "Weekly", "Daily", "Cumulative"], default="Monthly",
                                    key="portfolio_newvol", label="NewVol",
                                    help="Click a bar to see that period's status split below.")

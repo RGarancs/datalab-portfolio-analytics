@@ -6,7 +6,7 @@ table (In Recovery / Restructured / Defaulted) with recovery detail.
 
 Several loan-level recovery fields (partial repaid, late principal / interest)
 are SYNTHESISED for illustration -- clearly labelled -- because they are not in
-the source export. Collateral value is derived from loan amount and LTC."""
+the source export. Collateral value is derived from loan amount and LTV."""
 from __future__ import annotations
 
 import numpy as np
@@ -20,7 +20,7 @@ from ui import chart_card, card_header, render_table, norm, RATING_BADGE, column
 from dims import PROJECT_DIMS
 
 TERM_BUCKETS = [(0, 12, "0–12m"), (12, 24, "12–24m"), (24, 36, "24–36m"), (36, 999, "36m+")]
-OUTSTANDING = ["Active", "Servicing", "Restructured", "In Recovery", "Defaulted"]
+OUTSTANDING = ["In payment", "In risk mitigation", "Collateralized", "Sold to reinsurance", "Defaulted"]
 
 
 def _row_seed(pid: str) -> int:
@@ -38,8 +38,8 @@ def render(scoped: dict, theme: str, audience: str, today) -> None:
     book = projects[projects.status.isin(OUTSTANDING)]
     current_port = float(book["funded_amount"].sum())
     base = max(current_port, 1.0)
-    rec = projects[projects.status == "In Recovery"]
-    res = projects[projects.status == "Restructured"]
+    rec = projects[projects.status == "Sold to reinsurance"]
+    res = projects[projects.status == "In risk mitigation"]
     dft = projects[projects.status == "Defaulted"]
     rec_amt, res_amt, dft_amt = (float(x["funded_amount"].sum()) for x in (rec, res, dft))
     dflt_12m = dft[dft["default_date"] >= today - pd.DateOffset(months=12)] if not dft.empty else dft
@@ -47,32 +47,33 @@ def render(scoped: dict, theme: str, audience: str, today) -> None:
 
     # ---- 4 headline cards ----
     render_kpi_row([
-        {"label": "Current portfolio", "value": format_number(current_port, "eur"),
+        {"label": "Performing book", "value": format_number(current_port, "eur"),
          "delta": f"{len(book):,} loans outstanding", "dir": "none"},
-        {"label": "In Recovery", "value": format_number(rec_amt, "eur"),
+        {"label": "Sold to reinsurance", "value": format_number(rec_amt, "eur"),
          "delta": f"{rec_amt / base * 100:.1f}% of portfolio", "dir": "bad"},
-        {"label": "Restructured", "value": format_number(res_amt, "eur"),
+        {"label": "In risk mitigation", "value": format_number(res_amt, "eur"),
          "delta": f"{res_amt / base * 100:.1f}% of portfolio", "dir": "flat"},
-        {"label": "Default", "value": format_number(dft_amt, "eur"),
+        {"label": "Defaulted", "value": format_number(dft_amt, "eur"),
          "delta": f"{dft_amt / base * 100:.1f}% of portfolio · 12M {default_rate_12m:.1f}%", "dir": "bad"},
     ], columns=4)
 
-    distressed = projects[projects.status.isin(["Defaulted", "In Recovery", "Restructured"])].copy()
+    distressed = projects[projects.status.isin(["Defaulted", "Sold to reinsurance", "In risk mitigation", "Collateralized"])].copy()
 
     # ---- deep dive (collapsible): explore the distressed book + recovery detail ----
-    with deep_dive("Explore the distressed book · recovery detail per loan"):
+    with deep_dive("Explore the distressed book · workout detail per loan"):
         if not distressed.empty:
             with chart_card(deep=True):
                 st.markdown('<div class="chart-title">Explore the distressed book</div>'
                             '<div class="chart-sub">Change "Split by" inside the chart · hover for KPIs + top 10 loans</div>',
                             unsafe_allow_html=True)
-                kpi_opts = ["Funded €", "Loans", "Avg rate", "Avg LTC"]
+                kpi_opts = ["Exposure €", "Loans", "Avg rate", "Avg LTV"]
                 chosen = kpi_opts
 
                 def extra_kpis(table, sub):
                     if not len(sub):
                         return []
-                    out = {"Avg rate": f"{sub['interest_rate'].mean():.1f}%", "Avg LTC": f"{sub['ltc'].mean():.0f}%"}
+                    out = {"Avg rate": f"{sub['interest_rate'].mean():.1f}%",
+                           "Avg LTV": ("—" if sub["ltc"].isna().all() else f"{sub['ltc'].mean():.0f}%")}
                     return [[k, out[k]] for k in chosen if k in out]
 
                 payload = build_split_payload(
@@ -86,8 +87,8 @@ def render(scoped: dict, theme: str, audience: str, today) -> None:
         # ---- distressed-loans table with selectable pool + recovery detail ----
         with chart_card(deep=True):
             sel = card_header("Distressed loans — recovery detail",
-                              subtitle="Exposure, partial repaid, late payments, collateral, time in recovery · illustrative",
-                              options=["In Recovery", "Restructured", "Defaulted"], default="In Recovery",
+                              subtitle="Exposure, principal repaid, arrears, collateral, time in workout · illustrative",
+                              options=["Sold to reinsurance", "In risk mitigation", "Collateralized", "Defaulted"], default="In risk mitigation",
                               key="risk_pool", label="RiskPool",
                               help="Choose which distressed pool to inspect.")
             d = projects[projects.status == sel].copy()
@@ -102,7 +103,7 @@ def render(scoped: dict, theme: str, audience: str, today) -> None:
                     repaid = funded * float(rng.uniform(0.05, 0.45))
                     late_p = funded * float(rng.uniform(0.02, 0.12))
                     late_i = funded * r.interest_rate / 100 * float(rng.uniform(0.10, 0.60))
-                    collateral = funded / (r.ltc / 100) if r.ltc else funded
+                    collateral = funded / (r.ltc / 100) if pd.notna(r.ltc) and r.ltc else funded
                     fundeds.append(funded); collaterals.append(collateral)
                     row = {"Loan": r.project_name, "Country": r.country, "Rating": r.rating,
                            "Total funded": format_number(funded, "eur"),
@@ -110,7 +111,7 @@ def render(scoped: dict, theme: str, audience: str, today) -> None:
                            "Late princ.": format_number(late_p, "eur"),
                            "Late int.": format_number(late_i, "eur"),
                            "Collateral": format_number(collateral, "eur")}
-                    if sel == "In Recovery":
+                    if sel == "Sold to reinsurance":
                         if pd.notna(r.default_date):
                             months = (today - pd.Timestamp(r.default_date)).days / 30.44
                             row["Time in recovery"] = f"{months:.0f} mo"
@@ -118,10 +119,10 @@ def render(scoped: dict, theme: str, audience: str, today) -> None:
                             row["Time in recovery"] = "—"
                     rows.append(row)
                 num_cols = {"Repaid", "Late princ.", "Late int."}
-                if sel == "In Recovery":
+                if sel == "Sold to reinsurance":
                     num_cols.add("Time in recovery")
                 render_table(pd.DataFrame(rows), num_cols=num_cols, badges={"Rating": RATING_BADGE}, rank=True,
                              bar_frac={"Total funded": norm(fundeds), "Collateral": norm(collaterals)},
                              max_height=440, export_name=f"risk_{sel.lower().replace(' ', '_')}")
                 st.caption("Partial repaid and late-payment splits are synthesised for illustration · "
-                           "collateral value = loan amount ÷ (LTC ÷ 100).")
+                           "collateral value = loan amount ÷ (LTV ÷ 100).")

@@ -1,4 +1,4 @@
-"""Overview tab -- investor pipeline boxes, and the unified split explorer:
+"""Overview tab -- customer and loan-book pipeline boxes, and the unified split explorer:
 one chart with an in-chart "Split by" dropdown (client-side, no rerun),
 Bars/Donut toggle, and a hover panel showing selectable KPIs + a top-10 list.
 A plain click-to-focus chart + summary table follow."""
@@ -9,7 +9,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from theme import atelier_colorway, plotly_layout, render_kpi_row, gradient_bars
-from metrics import format_number, pipeline_counts, project_pipeline_counts
+from metrics import format_number, pipeline_counts, loan_pipeline_counts
 from ui import chart_card, card_header, render_legend, render_table, norm, column_picker, build_split_payload
 from dims import SPLIT_DIMS
 
@@ -24,9 +24,9 @@ def _on_bar_click() -> None:
 
 
 def render_pipeline(investors: pd.DataFrame, investments: pd.DataFrame, as_of, theme: str) -> None:
-    """Registered → Identified → Active funnel + avg investment, with a growth toggle."""
+    """Onboarded → KYC verified → With deposit account, plus average deposit balance."""
     with chart_card():
-        mode = card_header("Investor pipeline", subtitle="Registered → Identified (KYC) → Active (funded wallet)",
+        mode = card_header("Customer pipeline", subtitle="Onboarded → KYC verified → With a deposit account",
                            options=["vs last day", "vs last month", "vs 12M"], default="vs last month",
                            key="pipeline_growth", label="PipeGrowth", help="Reference period for the growth delta.")
         as_of = pd.Timestamp(as_of)
@@ -39,21 +39,21 @@ def render_pipeline(investors: pd.DataFrame, investments: pd.DataFrame, as_of, t
         avg_inv = float(iv["amount"].mean()) if len(iv) else 0.0
 
         items = []
-        for k in ["Registered", "Identified", "Active"]:
+        for k in ["Onboarded", "KYC verified", "With deposit account"]:
             d = now[k] - ref[k]
             pct = (d / ref[k] * 100) if ref[k] else 0.0
             items.append({"label": k, "value": f"{now[k]:,}",
                           "delta": f"{'+' if d >= 0 else '−'}{abs(d):,} · {pct:+.1f}%",
                           "dir": "good" if d > 0 else "flat" if d == 0 else "bad"})
-        items.append({"label": "Avg. investment", "value": format_number(avg_inv, "eur"), "delta": None, "dir": "none"})
+        items.append({"label": "Avg. disbursement", "value": format_number(avg_inv, "eur"), "delta": None, "dir": "none"})
         render_kpi_row(items, columns=4)
 
 
 def render_project_pipeline(projects: pd.DataFrame, as_of, theme: str) -> None:
-    """Total → Active → Servicing project funnel + avg project size, with the same
-    growth-reference toggle (top-right) as the investor pipeline above it."""
+    """Originated → In payment → Distressed loan funnel + average loan size, with
+    the same growth-reference toggle as the customer pipeline above it."""
     with chart_card():
-        mode = card_header("Project pipeline", subtitle="Total → Active → Servicing funds",
+        mode = card_header("Loan book pipeline", subtitle="Originated → In payment → Distressed",
                            options=["vs last day", "vs last month", "vs 12M"], default="vs last month",
                            key="proj_pipeline_growth", label="ProjGrowth",
                            help="Reference period for the growth delta.")
@@ -61,17 +61,17 @@ def render_project_pipeline(projects: pd.DataFrame, as_of, theme: str) -> None:
         ref_date = {"vs last day": as_of - pd.Timedelta(days=1),
                     "vs last month": as_of - pd.DateOffset(months=1),
                     "vs 12M": as_of - pd.DateOffset(months=12)}[mode]
-        now = project_pipeline_counts(projects, as_of, "Stages")
-        ref = project_pipeline_counts(projects, ref_date, "Stages")
+        now = loan_pipeline_counts(projects, as_of)
+        ref = loan_pipeline_counts(projects, ref_date)
 
         items = []
-        for k in ["Total", "Active", "Servicing"]:
+        for k in ["Originated", "In payment", "Distressed"]:
             d = now[k] - ref[k]
             pct = (d / ref[k] * 100) if ref[k] else 0.0
-            items.append({"label": f"{k} projects", "value": f"{now[k]:,}",
+            items.append({"label": k, "value": f"{now[k]:,}",
                           "delta": f"{'+' if d >= 0 else '−'}{abs(d):,} · {pct:+.1f}%",
                           "dir": "good" if d > 0 else "flat" if d == 0 else "bad"})
-        items.append({"label": "Avg. project size", "value": format_number(now["avg_size"], "eur"),
+        items.append({"label": "Avg. loan size", "value": format_number(now["avg_size"], "eur"),
                       "delta": None, "dir": "none"})
         render_kpi_row(items, columns=4)
 
@@ -88,7 +88,7 @@ def render(scoped: dict, theme: str, audience: str, split_label: str, split_col:
     with chart_card():
         c_t, c_split, c_type, c_unit = st.columns([0.36, 0.28, 0.18, 0.18], vertical_alignment="center")
         with c_t:
-            st.markdown('<div class="chart-title">Portfolio split — click to focus</div>'
+            st.markdown('<div class="chart-title">Loan book split — click to focus</div>'
                         '<div class="chart-sub">Change "Split by" here · click a bar to focus</div>',
                         unsafe_allow_html=True)
         with c_split:
@@ -156,14 +156,14 @@ def render(scoped: dict, theme: str, audience: str, split_label: str, split_col:
         g = g.sort_values("funded", ascending=False)
         grand = float(g["funded"].sum()) or 1.0
         val_is_eur = split_table == "projects"
-        valcol = "Funded" if val_is_eur else "Investors"
+        valcol = "Exposure" if val_is_eur else "Customers"
         rows = [{"Segment": str(idx), valcol: format_number(r.funded, "eur" if val_is_eur else "int"),
                  "% total": f"{r.funded/grand*100:.1f}%", "Count": f"{int(r.n):,}"} for idx, r in g.iterrows()]
         render_table(pd.DataFrame(rows), num_cols={"Count"},
                      bar_frac={valcol: norm(g["funded"].tolist()),
                                "% total": [v / grand for v in g["funded"].tolist()]}, rank=True,
                      export_name="overview_split_summary",
-                     title=f"Split summary — {split_label}", subtitle="Funded €, share of total, data bars")
+                     title=f"Split summary — {split_label}", subtitle="Exposure €, share of book, data bars")
 
 
 def render_hover_explorer(scoped: dict, split_label: str, split_col: str, split_table: str, theme: str) -> None:
@@ -179,17 +179,17 @@ def render_hover_explorer(scoped: dict, split_label: str, split_col: str, split_
         st.markdown('<div class="chart-title">Split explorer</div>'
                     '<div class="chart-sub">Change "Split by" inside the chart · hover to drill in — '
                     'pick which KPIs the tooltip shows</div>', unsafe_allow_html=True)
-        kpi_opts = ["Funded €", "Loans", "Avg rate", "Avg LTC", "Investors", "Avg wallet"]
+        kpi_opts = ["Exposure €", "Loans", "Avg rate", "Avg LTV", "Customers", "Avg deposits"]
         chosen = kpi_opts  # tooltip shows all KPIs (picker removed)
 
         def extra_kpis(table, sub):
             out = {}
             if table == "projects" and len(sub):
                 out["Avg rate"] = f"{sub['interest_rate'].mean():.1f}%"
-                out["Avg LTC"] = f"{sub['ltc'].mean():.0f}%"
+                out["Avg LTV"] = ("—" if sub["ltc"].isna().all() else f"{sub['ltc'].mean():.0f}%")
             if table == "investors" and len(sub):
-                out["Investors"] = f"{len(sub):,}"
-                out["Avg wallet"] = format_number(float(sub['wallet_balance'].mean()), "eur")
+                out["Customers"] = f"{len(sub):,}"
+                out["Avg deposits"] = format_number(float(sub['wallet_balance'].mean()), "eur")
             return [[k, out[k]] for k in chosen if k in out]
 
         payload = build_split_payload(
